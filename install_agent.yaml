@@ -1,0 +1,24 @@
+---
+ - hosts: testgroup
+   tasks:
+    - name: Install the RPM
+      yum: name=http://repo.zabbix.com/zabbix/4.0/rhel/7/x86_64/zabbix-release-4.0-1.el7.noarch.rpm
+
+    - name: Install zabbix agent
+      yum:
+        name: zabbix-agent
+        state: latest
+        update_cache: yes
+
+    - name: Copy zabbix agent configuration file from github
+      get_url:
+        url: https://raw.githubusercontent.com/CCI-MOC/zabbix-config/master/agent_config_files/zabbix_agentd.conf
+        dest: /etc/zabbix/zabbix_agentd.conf
+        force: yes
+
+    - name: Start and enable zabbix agent
+      service:
+        name: zabbix-agent
+        state: started
+        enabled: yes
+
