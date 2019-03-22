@@ -1,5 +1,5 @@
 ---
- - hosts: PleaseChangeMe
+ - hosts: "{{ hostgroup }}"
    become: true
    tasks:
     - name: Install the RPM for x86_64
@@ -21,7 +21,7 @@
 
     - name: Copy zabbix agent configuration file from github
       get_url:
-        url: https://raw.githubusercontent.com/CCI-MOC/zabbix-config/master/agent_config_files/zabbix_agentd.conf
+        url: https://raw.githubusercontent.com/CCI-MOC/zabbix-config/master/agent_config_files/{{ agent_type }}.conf
         dest: /etc/zabbix/zabbix_agentd.conf
         force: yes
 
