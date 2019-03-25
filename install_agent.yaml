@@ -31,8 +31,8 @@
 
     - name: Copy the PSK file
       copy:
-        src: zabbix_agent.psk
-        dest: /etc/zabbix/zabbix_agent.psk
+        src: zabbix_agentd.psk
+        dest: /etc/zabbix/zabbix_agentd.psk
         owner: zabbix
         group: zabbix
         mode: 0400
