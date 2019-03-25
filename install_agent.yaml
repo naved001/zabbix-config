@@ -29,6 +29,15 @@
       notify:
         - Restart Zabbix
 
+    - name: Copy the PSK file
+      copy:
+        src: zabbix_agent.psk
+        dest: /etc/zabbix/zabbix_agent.psk
+        owner: zabbix
+        group: zabbix
+        mode: 0400
+
+
     - name: Start and enable zabbix agent
       service:
         name: zabbix-agent
