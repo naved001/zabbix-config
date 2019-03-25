@@ -1,5 +1,5 @@
 ---
- - hosts: "{{ hostgroup }}"
+ - hosts: zabbix-hosts
    become: true
    tasks:
     - name: Install the RPM for x86_64
@@ -20,7 +20,7 @@
 
     - name: Copy zabbix agent configuration file from github
       get_url:
-        url: https://raw.githubusercontent.com/CCI-MOC/zabbix-config/master/agent_config_files/{{ agent_type }}.conf
+        url: https://raw.githubusercontent.com/CCI-MOC/zabbix-config/master/agent_config_files/{{ agent_type | default('passive') }}.conf
         dest: /etc/zabbix/zabbix_agentd.conf
         force: yes
       notify:
