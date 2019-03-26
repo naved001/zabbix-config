@@ -1,8 +1,6 @@
 ---
 - hosts: zabbix-hosts
   become: true
-  vars:
-    zabbix_agent_type: passive
 
   tasks:
     - name: Install the RPM for x86_64
@@ -24,7 +22,7 @@
 
     - name: Install zabbix agent configuration
       copy:
-        src: agent_config_files/{{ zabbix_agent_type }}.conf
+        src: zabbix_agentd.conf
         dest: /etc/zabbix/zabbix_agentd.conf
       notify:
         - Restart Zabbix
@@ -36,7 +34,6 @@
         owner: zabbix
         group: zabbix
         mode: 0400
-
 
     - name: Start and enable zabbix agent
       service:
