@@ -35,6 +35,15 @@
         group: zabbix
         mode: 0400
 
+    - name: Copy the zabbix sudoers file
+      copy:
+        src: zabbix.sudoers
+        dest: /etc/sudoers/zabbix
+        owner: root
+        group: root
+        mode: 0440
+      when: ansible_architecture == "x86_64"
+
     - name: Start and enable zabbix agent
       service:
         name: zabbix-agent

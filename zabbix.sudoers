@@ -1,0 +1,2 @@
+# This file is managed by ansible
+zabbix ALL=(ALL) NOPASSWD: /usr/sbin/dmidecode
