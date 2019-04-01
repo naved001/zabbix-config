@@ -38,21 +38,34 @@
     - name: Copy the zabbix sudoers file
       copy:
         src: zabbix.sudoers
-        dest: /etc/sudoers/zabbix
+        dest: /etc/sudoers.d/zabbix
         owner: root
         group: root
         mode: 0440
+      when: ansible_architecture == "x86_64"
+
+    - name: Add zabbix_agent_t to permissive domain
+      selinux_permissive:
+        name: zabbix_agent_t
+        permissive: true
+      when: ansible_architecture == "x86_64"
+
+    - name: Let zabbix process run sudo
+      seboolean:
+        name: zabbix_run_sudo
+        state: true
+        persistent: true
       when: ansible_architecture == "x86_64"
 
     - name: Start and enable zabbix agent
       service:
         name: zabbix-agent
         state: started
-        enabled: yes
+        enabled: true
 
   handlers:
     - name: Restart Zabbix
       service:
         name: zabbix-agent
         state: restarted
-        enabled: yes
+        enabled: true
