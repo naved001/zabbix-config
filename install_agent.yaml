@@ -48,18 +48,23 @@
         mode: 0440
       when: ansible_architecture == "x86_64"
 
+    - name: Test if SElinux is running
+      command: getenforce
+      register: sestatus
+      changed_when: false
+
     - name: Add zabbix_agent_t to permissive domain
       selinux_permissive:
         name: zabbix_agent_t
         permissive: true
-      when: ansible_architecture == "x86_64"
+      when: '"Disabled" not in sestatus.stdout'
 
     - name: Let zabbix process run sudo
       seboolean:
         name: zabbix_run_sudo
         state: true
         persistent: true
-      when: ansible_architecture == "x86_64"
+      when: '"Disabled" not in sestatus.stdout'
 
     - name: Start and enable zabbix agent
       service:
