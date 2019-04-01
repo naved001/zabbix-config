@@ -1,5 +1,5 @@
 ---
-- hosts: zabbix-hosts
+- hosts: "{{ targets | default('zabbix-hosts') }}"
   become: true
 
   tasks:
@@ -14,11 +14,15 @@
         dest: /etc/yum.repos.d/ppc64le-zabbix-4.repo
       when: ansible_architecture == "ppc64le"
 
-    - name: Install zabbix agent
+    - name: Install zabbix agent and policycoreutils-python
       yum:
-        name: zabbix-agent
+        name: "{{ packages }}"
         state: latest
         update_cache: true
+      vars:
+        packages:
+        - zabbix-agent
+        - policycoreutils-python
 
     - name: Install zabbix agent configuration
       copy:

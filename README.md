@@ -6,6 +6,7 @@ Repository for zabbix configuration file and deployment tools.
 
 1. Create a host group called [zabbix-hosts] in your ansible hosts file at `/etc/ansible/hosts` and put
 the list of hosts (or host groups) you want to run this playbook against.
+ - You can override the host group by specifying `--extra-vars "targets=groupname"`
 
 2. Create`zabbix_agent.psk` in this git repo with the Pre shared key for your zabbix server.
 
