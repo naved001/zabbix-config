@@ -24,6 +24,13 @@
         - zabbix-agent
         - policycoreutils-python
 
+    - name: Install dmidecode only on x86 machines.
+      yum:
+        name: dmidecode
+        state: latest
+        update_cache: true
+      when: ansible_architecture == "x86_64"
+
     - name: Install zabbix agent configuration
       copy:
         src: zabbix_agentd.conf
