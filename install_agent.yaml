@@ -23,6 +23,7 @@
         packages:
         - zabbix-agent
         - policycoreutils-python
+        - pciutils
 
     - name: Install dmidecode only on x86 machines.
       yum:
@@ -45,6 +46,14 @@
         owner: zabbix
         group: zabbix
         mode: 0400
+
+    - name: Copy script to get inventory
+      copy:
+        src: inventory.sh
+        dest: /etc/zabbix/inventory.sh
+        owner: zabbix
+        group: zabbix
+        mode: 0550
 
     - name: Copy the zabbix sudoers file
       copy:
