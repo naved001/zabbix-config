@@ -12,7 +12,7 @@ echo "Total Memory (including GPU, if available):" `lsmem |grep "Total online" |
 sudo dmidecode 2>/dev/null | grep -A3 DDR |head -n3
 echo "________________________________________________________________________________________________________"
 echo NIC info:
-lspci |grep -iE 'ethernet|infiniband' |cut -d ' ' -f 2-20
+lspci |grep -iE 'ethernet|infiniband' |grep -iv 'virtual function' |cut -d ' ' -f 2-20
 echo "________________________________________________________________________________________________________"
 echo GPU info:
 lspci |grep -iE 'nvidia|amd'|cut -d ' ' -f 2-20
