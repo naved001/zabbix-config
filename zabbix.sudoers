@@ -1,3 +1,5 @@
 # This file is managed by ansible
 zabbix ALL=(ALL) NOPASSWD: /usr/sbin/dmidecode
+
+# On older systems (eg centos6) we need this
 Defaults:zabbix !requiretty
