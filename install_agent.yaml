@@ -24,6 +24,7 @@
         - zabbix-agent
         - policycoreutils-python
         - pciutils
+        - selinux-policy
 
     - name: Install dmidecode only on x86 machines.
       yum:
