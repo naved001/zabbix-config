@@ -64,6 +64,12 @@
         mode: 0440
       when: ansible_architecture == "x86_64"
 
+    - name: Start and enable zabbix agent
+      service:
+        name: zabbix-agent
+        state: started
+        enabled: true
+
     - name: Test if SElinux is running
       command: getenforce
       register: sestatus
@@ -81,12 +87,6 @@
         state: true
         persistent: true
       when: '"Disabled" not in sestatus.stdout'
-
-    - name: Start and enable zabbix agent
-      service:
-        name: zabbix-agent
-        state: started
-        enabled: true
 
   handlers:
     - name: Restart Zabbix
