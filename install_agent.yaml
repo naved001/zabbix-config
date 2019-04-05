@@ -14,7 +14,7 @@
         dest: /etc/yum.repos.d/ppc64le-zabbix-4.repo
       when: ansible_architecture == "ppc64le"
 
-    - name: Install zabbix agent and policycoreutils-python
+    - name: Install common packages
       yum:
         name: "{{ packages }}"
         state: latest
