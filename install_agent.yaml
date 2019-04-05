@@ -25,6 +25,7 @@
         - policycoreutils-python
         - pciutils
         - selinux-policy
+        - yum-utils
 
     - name: Install dmidecode only on x86 machines.
       yum:
