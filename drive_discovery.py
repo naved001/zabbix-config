@@ -75,7 +75,10 @@ def get_drives():
 	return
 
 def test_health(drive):
-	health = multi_pipe_command("sudo smartctl -H " + drive + "|grep -i health|cut -d : -f 2")
+	if '/dev/' in drive:
+		health = multi_pipe_command("sudo smartctl -H " + drive + "|grep -i health|cut -d : -f 2")
+	else:
+		health = multi_pipe_command("sudo smartctl -H /dev/bus/0 -d " + drive + "|grep -i health|cut -d : -f 2")
 	sys.stdout.write(health.strip())
 	return
 
