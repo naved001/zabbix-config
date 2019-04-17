@@ -1,5 +1,6 @@
 # This file is managed by ansible
 zabbix ALL=(ALL) NOPASSWD: /usr/sbin/dmidecode
+zabbix ALL=(ALL) NOPASSWD: /usr/sbin/smartctl
 
 # On older systems (eg centos6) we need this
 Defaults:zabbix !requiretty
