@@ -1,7 +1,8 @@
 #! /bin/python
 
-"""This script finds all drives on a system including drives that are behind a raid controller.
-It will ignore drives that are not SMART capable
+"""
+This script finds all drives on a system including drives that are behind a raid controller.
+It will ignore drives that are not SMART capable.
 """
 
 import subprocess
@@ -32,12 +33,24 @@ def multi_pipe_command(command):
     return output
 
 def get_drives():
-	drives = multi_pipe_command("sudo smartctl --scan-open|cut -d ' ' -f 1-3|grep -v #|cut -d ' ' -f 3")
+	"""
+	This method collects drives in a tuple of the format
+	(raid-controller-number, drive-name-on-raid-controller)
+	eg; ("/dev/bus/0", "megaraid,3")
 
-	# Do some cleanup. Get rid of the words scsi and sat, since drives attached that way
-	# will be discovered separately.
+	if the drive is directly attached i.e. not behind a raid controller then it's reported as
+	("no-raid", "/dev/sda")
+
+	A list of such tuples is formed and a JSON is returned that zabbix requires for LLD.
+	"""
+	drives = multi_pipe_command("sudo smartctl --scan-open|cut -d ' ' -f 1,3|grep -v scsi|grep -v sat")
+
+	# Do some cleanup.
 	drives = drives.split('\n')
-	raid_drives = [drive for drive in drives if drive and drive!="scsi" and drive!="sat"]
+	raid_drives_tmp = [drive for drive in drives if drive]
+	raid_drives = []
+	for drive in raid_drives_tmp:
+		raid_drives.append(tuple(drive.split(' ')))
 
 	# This finds block devices that aren't behind a raid controller.
 	drives = multi_pipe_command("lsblk -d|cut -d ' ' -f 1")
@@ -45,14 +58,17 @@ def get_drives():
 	# Cleanup, split the output into an array and remove rados block devices and the headers.
 	# Also append '/dev/' in front of the device name
 	drives=drives.split('\n')
-	other_drives = ['/dev/'+drive for drive in drives if drive and drive!="NAME" and "rbd" not in drive]
+	other_drives_tmp = ['/dev/'+drive for drive in drives if drive and drive!="NAME" and "rbd" not in drive]
+	other_drives = []
+	for drive in other_drives_tmp:
+		other_drives.append(('no-raid', drive))
 
 
 	# With this filter, we get drives that aren't a part of the raid controller.
 	drives_not_in_raid = []
 	for drive in other_drives:
 	    try:
-	        process_smartctl = subprocess.check_output(['sudo', 'smartctl', '-i', drive],shell=False)
+	        process_smartctl = subprocess.check_output(['sudo', 'smartctl', '-i', drive[1]],shell=False)
 	        if "device lacks SMART" in process_smartctl:
 	            continue
 	        drives_not_in_raid.append(drive)
@@ -61,11 +77,11 @@ def get_drives():
 
 	all_drives = []
 	for drive in raid_drives + drives_not_in_raid:
-	    if '/dev/' in drive:
-	        serial = multi_pipe_command("sudo smartctl -i " + drive + "|grep -i serial|cut -d : -f 2")
+	    if '/dev/' in drive[1]:
+	        serial = multi_pipe_command("sudo smartctl -i " + drive[1] + "|grep -i serial|cut -d : -f 2")
 	    else:
-	        serial = multi_pipe_command("sudo smartctl -i /dev/bus/0 -d " + drive + "|grep -i serial|cut -d : -f 2")
-	    all_drives.append({"{#DRIVENAME}": drive, "{#DRIVESERIAL}": serial.strip()})
+	        serial = multi_pipe_command("sudo smartctl -i " + drive[0] + " -d "  + drive[1] + "|grep -i serial|cut -d : -f 2")
+	    all_drives.append({"{#DRIVENAME}": drive[1], "{#DRIVESERIAL}": serial.strip(), "{#RAIDCONTROLLER}": drive[0]})
 
 	zabbix_output = {}
 	zabbix_output["data"] = all_drives
@@ -75,14 +91,16 @@ def get_drives():
 	return
 
 def test_health(drive):
-	if '/dev/' in drive:
-		health = multi_pipe_command("sudo smartctl -H " + drive + "|grep -i health|cut -d : -f 2")
+	if '/dev/' in drive[1]:
+		health = multi_pipe_command("sudo smartctl -H " + drive[1] + "|grep -i health|cut -d : -f 2")
 	else:
-		health = multi_pipe_command("sudo smartctl -H /dev/bus/0 -d " + drive + "|grep -i health|cut -d : -f 2")
+		health = multi_pipe_command("sudo smartctl -H " + drive[0] + " -d " + drive[1] + "|grep -i health|cut -d : -f 2")
 	sys.stdout.write(health.strip())
 	return
 
-if len(sys.argv) > 1:
-	test_health(sys.argv[1])
+if len(sys.argv) == 3:
+	test_health((sys.argv[1], sys.argv[2]))
+elif len(sys.argv) == 4:
+	test_health((sys.argv[1], sys.argv[2]+","+sys.argv[3]))
 else:
 	get_drives()
