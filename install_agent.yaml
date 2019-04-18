@@ -73,7 +73,6 @@
         owner: root
         group: root
         mode: 0440
-      when: ansible_architecture == "x86_64"
 
     - name: Start and enable zabbix agent
       service:
