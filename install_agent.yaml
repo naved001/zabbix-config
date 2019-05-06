@@ -52,7 +52,7 @@
 
     - name: Copy script to get inventory
       copy:
-        src: inventory.sh
+        src: scripts/inventory.sh
         dest: /etc/zabbix/inventory.sh
         owner: zabbix
         group: zabbix
@@ -60,7 +60,7 @@
 
     - name: Copy script to get drive information
       copy:
-        src: drive_discovery.py
+        src: scripts/drive_discovery.py
         dest: /etc/zabbix/drive_discovery.py
         owner: zabbix
         group: zabbix
