@@ -56,6 +56,7 @@ def get_used(root):
     size_in_bytes = int(temp[0]) * size[temp[1]]
     return size_in_bytes
 
+
 # test
 output = get_roots()
 print output
