@@ -66,6 +66,14 @@
         group: zabbix
         mode: 0550
 
+    - name: Copy script to get ceph root usage details
+      copy:
+        src: scripts/ceph.py
+        dest: /etc/zabbix/ceph.py
+        owner: zabbix
+        group: zabbix
+        mode: 0550
+
     - name: Copy the zabbix sudoers file
       copy:
         src: zabbix.sudoers

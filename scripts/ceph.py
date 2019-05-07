@@ -24,7 +24,10 @@ def get_roots():
     roots = {"data": []}
     for item in output:
         temp = item.split()
-        roots["data"].append({"{#ROOTNAME}": temp[temp.index("root") + 1]})
+        rootname = temp[temp.index("root") + 1]
+        if get_total(rootname) == 0:
+            continue
+        roots["data"].append({"{#ROOTNAME}": rootname})
     return roots
 
 
@@ -38,6 +41,8 @@ def get_usage(root):
     output = proc.communicate()[0]
 
     output = filter(lambda item: root in item, output.split("\n"))
+    if output == []:
+        sys.exit("Ceph root not found")
     assert len(output) == 1, "Provided root matched multiple lines " + root
     usage = pattern.findall(output[0])
     return usage
@@ -57,12 +62,11 @@ def get_used(root):
     return size_in_bytes
 
 
-# test
-output = get_roots()
-print output
-for item in output["data"]:
-    print("\n******************")
-    root = item["{#ROOTNAME}"]
-    print(root)
-    print(get_total(root))
-    print(get_used(root))
+if len(sys.argv) != 3:
+    sys.stdout.write(json.dumps(get_roots()))
+elif sys.argv[1] == 'total':
+    sys.stdout.write(str(get_total(sys.argv[2])))
+elif sys.argv[1] == 'used':
+    sys.stdout.write(str(get_total(sys.argv[2])))
+else:
+    get_roots()
