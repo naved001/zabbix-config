@@ -67,6 +67,6 @@ if len(sys.argv) != 3:
 elif sys.argv[1] == 'total':
     sys.stdout.write(str(get_total(sys.argv[2])))
 elif sys.argv[1] == 'used':
-    sys.stdout.write(str(get_total(sys.argv[2])))
+    sys.stdout.write(str(get_used(sys.argv[2])))
 else:
     get_roots()
