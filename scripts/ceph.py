@@ -9,7 +9,7 @@ import subprocess
 import sys
 import re
 
-pattern = re.compile(r'(\d+)\s?(B|KiB|MiB|GiB|TiB|PiB)')
+pattern = re.compile(r'(\d*.?\d*)\s?(B|KiB|MiB|GiB|TiB|PiB)')
 size = {"B": 1, "KiB": 2**10, "MiB": 2**20,
         "GiB": 2**30, "TiB": 2**40, "PiB": 2**50}
 
@@ -51,15 +51,15 @@ def get_usage(root):
 def get_total(root):
     """Get total size of ceph root in bytes"""
     temp = get_usage(root)[0]
-    size_in_bytes = int(temp[0]) * size[temp[1]]
-    return size_in_bytes
+    size_in_bytes = float(temp[0]) * size[temp[1]]
+    return long(round(size_in_bytes))
 
 
 def get_used(root):
     """Returns used byes of ceph root"""
     temp = get_usage(root)[1]
-    size_in_bytes = int(temp[0]) * size[temp[1]]
-    return size_in_bytes
+    size_in_bytes = float(temp[0]) * size[temp[1]]
+    return long(round(size_in_bytes))
 
 
 if len(sys.argv) != 3:
