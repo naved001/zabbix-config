@@ -9,7 +9,7 @@ import subprocess
 import sys
 import re
 
-pattern = re.compile(r'(\d*.?\d*)\s?(B|KiB|MiB|GiB|TiB|PiB)')
+pattern = re.compile(r'(\d*\.?\d*)\s?(B|KiB|MiB|GiB|TiB|PiB)')
 size = {"B": 1, "KiB": 2**10, "MiB": 2**20,
         "GiB": 2**30, "TiB": 2**40, "PiB": 2**50}
 
