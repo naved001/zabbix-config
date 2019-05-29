@@ -1,7 +1,7 @@
 #! /bin/python
 
 """
-This script finds all drives on a system including drives that are behind a raid controller.
+This script finds all physical drives on a system including drives that are behind a raid controller.
 It will ignore drives that are not SMART capable.
 """
 

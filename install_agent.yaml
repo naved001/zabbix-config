@@ -58,10 +58,18 @@
         group: zabbix
         mode: 0550
 
-    - name: Copy script to get drive information
+    - name: Copy script to get drive information (SMART)
       copy:
         src: scripts/drive_discovery.py
         dest: /etc/zabbix/drive_discovery.py
+        owner: zabbix
+        group: zabbix
+        mode: 0550
+
+    - name: Copy script to get logical drive statistics (i/o)
+      copy:
+        src: scripts/disk_io.py
+        dest: /etc/zabbix/disk_io.py
         owner: zabbix
         group: zabbix
         mode: 0550
