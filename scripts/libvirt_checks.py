@@ -36,7 +36,7 @@ class LibvirtConnection(object):
         """Return all domains"""
         domains = self.conn.listAllDomains()
         domains = [{"{#DOMAINNAME}": domain.name(), "{#DOMAINUUID}": domain.UUIDString()}
-                   for domain in domains]
+                   for domain in domains if domain.isActive()]
         sys.stdout.write(json.dumps({"data": domains}))
 
     def discover_vnics(self, domain_uuid_string):
@@ -90,8 +90,8 @@ class LibvirtConnection(object):
         except KeyError:
             # If the machine does not have an OS (or booted up), then stats may not contain what
             # we are looking for and a key error will be raised which will make the item
-            # unsupported in zabbix. -1 just prevents the item from becoming unsupported.
-            sys.stdout.write("-1")
+            # unsupported in zabbix. For those cases, we mark memory usage as zero.
+            sys.stdout.write("0")
 
     def get_cpu(self, domain_uuid_string, cputype):
         """Get CPU statistics. Libvirt returns the stats in nanoseconds.
@@ -123,9 +123,41 @@ class LibvirtConnection(object):
 
         sys.stdout.write(str(cpustats[cputype]))
 
-    def get_ifaceio(self, domain_uuid_string, iface):
+    def get_ifaceio(self, domain_uuid_string, iface, stat_type):
         """Get Network I / O"""
         domain = self.conn.lookupByUUIDString(domain_uuid_string)
+
+        try:
+            stats = domain.interfaceStats(iface)
+        except libvirt.libvirtError:
+            if domain.isActive():
+                raise
+            else:
+                sys.stdout.write("0")
+                sys.exit(0)
+
+        if stat_type.lower() == "read":
+            sys.stdout.write(str(stats[0]))
+        elif stat_type.lower() == "write":
+            sys.stdout.write(str(stats[4]))
+        else:
+            sys.stdout.write("Invalid stat_type.")
+            sys.exit(1)
+
+    def get_diskio(self, domain_uuid_string, disk, stat_type):
+        """Get Network I / O"""
+        domain = self.conn.lookupByUUIDString(domain_uuid_string)
+
+        try:
+            stats = domain.blockStatsFlags(disk)
+        except libvirt.libvirtError:
+            if domain.isActive():
+                raise
+            else:
+                sys.stdout.write("0")
+                sys.exit(0)
+
+        sys.stdout.write(str(stats.get(stat_type, "Invalid stat_type")))
 
     def is_active(self, domain_uuid_string):
         """Returns 1 if domain is active, 0 otherwise."""
