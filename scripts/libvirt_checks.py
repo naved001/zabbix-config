@@ -32,28 +32,36 @@ class LibvirtConnection(object):
         # See https://stackoverflow.com/questions/45541725/avoiding-console-prints-by-libvirt-qemu-python-apis
         libvirt.registerErrorHandler(f=self.libvirt_callback, ctx=None)
 
+    def _get_domain(self, domain_uuid_string):
+        """Find the domain by uuid and return domain object"""
+        domain = self.conn.lookupByUUIDString(domain_uuid_string)
+        if domain == None:
+            sys.stdout.write("Failed to find domain: " + domain_uuid_string)
+            sys.exit(1)
+        return domain
+
     def discover_domains(self):
         """Return all domains"""
         domains = self.conn.listAllDomains()
         domains = [{"{#DOMAINNAME}": domain.name(), "{#DOMAINUUID}": domain.UUIDString()}
                    for domain in domains if domain.isActive()]
-        sys.stdout.write(json.dumps({"data": domains}))
+        return json.dumps({"data": domains})
 
     def discover_vnics(self, domain_uuid_string):
         """Discover all virtual networks"""
-        domain = self.conn.lookupByUUIDString(domain_uuid_string)
+        domain = self._get_domain(domain_uuid_string)
         tree = ElementTree.fromstring(domain.XMLDesc())
         elements = tree.findall('devices/interface/target')
         interfaces = [{"{#VNIC}": element.get('dev')} for element in elements]
-        sys.stdout.write(json.dumps({"data": interfaces}))
+        return json.dumps({"data": interfaces})
 
     def discover_vdisks(self, domain_uuid_string):
         """Discover all virtual networks"""
-        domain = self.conn.lookupByUUIDString(domain_uuid_string)
+        domain = self._get_domain(domain_uuid_string)
         tree = ElementTree.fromstring(domain.XMLDesc())
         elements = tree.findall('devices/disk/target')
         disks = [{"{#VDISKS}": element.get('dev')} for element in elements]
-        sys.stdout.write(json.dumps({"data": disks}))
+        return json.dumps({"data": disks})
 
     def get_memory(self, domain_uuid_string, memtype):
         """Get memorystats for domain.
@@ -68,7 +76,7 @@ class LibvirtConnection(object):
 
         The API returns the output in KiB, so we multiply by 1024 to return bytes for zabbix.
         """
-        domain = self.conn.lookupByUUIDString(domain_uuid_string)
+        domain = self._get_domain(domain_uuid_string)
 
         try:
             stats = domain.memoryStats()
@@ -78,26 +86,25 @@ class LibvirtConnection(object):
             if domain.isActive():
                 raise
             else:
-                sys.stdout.write("0")
-                sys.exit(0)
+                return "0"
 
         try:
             memtype_dict = {"free": stats["unused"] * 1024,
                             "available": stats["usable"] * 1024,
                             "current_allocation": stats["actual"] * 1024}
-
-            sys.stdout.write(str(memtype_dict[memtype]))
         except KeyError:
             # If the machine does not have an OS (or booted up), then stats may not contain what
             # we are looking for and a key error will be raised which will make the item
             # unsupported in zabbix. For those cases, we mark memory usage as zero.
-            sys.stdout.write("0")
+            return "0"
+
+        return str(memtype_dict[memtype])
 
     def get_cpu(self, domain_uuid_string, cputype):
         """Get CPU statistics. Libvirt returns the stats in nanoseconds.
         Returns the overall percent usage.
         """
-        domain = self.conn.lookupByUUIDString(domain_uuid_string)
+        domain = self._get_domain(domain_uuid_string)
 
         try:
             cpustats_1 = domain.getCPUStats(True)
@@ -109,8 +116,7 @@ class LibvirtConnection(object):
             if domain.isActive():
                 raise
             else:
-                sys.stdout.write("0")
-                sys.exit(0)
+                return "0"
 
         number_of_cpus = domain.info()[3]
 
@@ -121,11 +127,11 @@ class LibvirtConnection(object):
                     "user_time": (cpustats_2[0]['user_time'] -
                                   cpustats_1[0]['user_time']) / (number_of_cpus * SLEEP_TIME * 10**7)}
 
-        sys.stdout.write(str(cpustats[cputype]))
+        return str(cpustats[cputype])
 
     def get_ifaceio(self, domain_uuid_string, iface, stat_type):
         """Get Network I / O"""
-        domain = self.conn.lookupByUUIDString(domain_uuid_string)
+        domain = self._get_domain(domain_uuid_string)
 
         try:
             stats = domain.interfaceStats(iface)
@@ -133,20 +139,18 @@ class LibvirtConnection(object):
             if domain.isActive():
                 raise
             else:
-                sys.stdout.write("0")
-                sys.exit(0)
+                return "0"
 
         if stat_type.lower() == "read":
-            sys.stdout.write(str(stats[0]))
+            return str(stats[0])
         elif stat_type.lower() == "write":
-            sys.stdout.write(str(stats[4]))
+            return str(stats[4])
         else:
-            sys.stdout.write("Invalid stat_type.")
-            sys.exit(1)
+            return("Invalid stat_type.")
 
     def get_diskio(self, domain_uuid_string, disk, stat_type):
         """Get Network I / O"""
-        domain = self.conn.lookupByUUIDString(domain_uuid_string)
+        domain = self._get_domain(domain_uuid_string)
 
         try:
             stats = domain.blockStatsFlags(disk)
@@ -154,14 +158,13 @@ class LibvirtConnection(object):
             if domain.isActive():
                 raise
             else:
-                sys.stdout.write("0")
-                sys.exit(0)
+                return "0"
 
-        sys.stdout.write(str(stats.get(stat_type, "Invalid stat_type")))
+        return str(stats.get(stat_type, "Invalid stat_type"))
 
     def is_active(self, domain_uuid_string):
         """Returns 1 if domain is active, 0 otherwise."""
-        domain = self.conn.lookupByUUIDString(domain_uuid_string)
+        domain = self._get_domain(domain_uuid_string)
         sys.stdout.write(str(domain.isActive()))
 
 
@@ -170,7 +173,8 @@ def main():
 
     libvirtconnection = LibvirtConnection()
     if len(sys.argv) >= 2:
-        getattr(libvirtconnection, sys.argv[1])(*sys.argv[2:])
+        ret = getattr(libvirtconnection, sys.argv[1])(*sys.argv[2:])
+        sys.stdout.write(ret)
     else:
         libvirtconnection.discover_domains()
 
