@@ -1,5 +1,10 @@
 #! /usr/bin/python
 
+"""
+This file holds the class that creates a connection to libvirt and provides
+various methods to get useful information
+"""
+
 import libvirt
 import sys
 import json
@@ -24,6 +29,7 @@ class LibvirtConnection(object):
         self.conn = libvirt.openReadOnly(uri)
         if self.conn == None:
             sys.stdout.write("Failed to open connection to the hypervisor")
+            #FIXME: Need to figure out if exiting is the write thing to do here.
             sys.exit(1)
 
         # We set this because when libvirt errors are raised, they are still
@@ -41,14 +47,16 @@ class LibvirtConnection(object):
         return domain
 
     def discover_domains(self):
-        """Return all domains"""
+        """Return all active domains.
+
+        Inactive domains will be discovered in the next run if they become active"""
         domains = self.conn.listAllDomains()
         domains = [{"{#DOMAINNAME}": domain.name(), "{#DOMAINUUID}": domain.UUIDString()}
                    for domain in domains if domain.isActive()]
         return json.dumps({"data": domains})
 
     def discover_vnics(self, domain_uuid_string):
-        """Discover all virtual networks"""
+        """Discover all virtual network interfaces."""
         domain = self._get_domain(domain_uuid_string)
         tree = ElementTree.fromstring(domain.XMLDesc())
         elements = tree.findall('devices/interface/target')
@@ -56,7 +64,7 @@ class LibvirtConnection(object):
         return json.dumps({"data": interfaces})
 
     def discover_vdisks(self, domain_uuid_string):
-        """Discover all virtual networks"""
+        """Discover all virtual disk drives"""
         domain = self._get_domain(domain_uuid_string)
         tree = ElementTree.fromstring(domain.XMLDesc())
         elements = tree.findall('devices/disk/target')
@@ -102,6 +110,7 @@ class LibvirtConnection(object):
 
     def get_cpu(self, domain_uuid_string, cputype):
         """Get CPU statistics. Libvirt returns the stats in nanoseconds.
+        
         Returns the overall percent usage.
         """
         domain = self._get_domain(domain_uuid_string)
@@ -166,18 +175,3 @@ class LibvirtConnection(object):
         """Returns 1 if domain is active, 0 otherwise."""
         domain = self._get_domain(domain_uuid_string)
         sys.stdout.write(str(domain.isActive()))
-
-
-def main():
-    """main I guess"""
-
-    libvirtconnection = LibvirtConnection()
-    if len(sys.argv) >= 2:
-        ret = getattr(libvirtconnection, sys.argv[1])(*sys.argv[2:])
-        sys.stdout.write(ret)
-    else:
-        libvirtconnection.discover_domains()
-
-
-if __name__ == "__main__":
-    main()
