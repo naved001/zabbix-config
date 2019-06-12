@@ -7,7 +7,6 @@ various methods to get useful information
 
 import libvirt
 import sys
-import json
 import time
 from xml.etree import ElementTree
 
@@ -29,7 +28,7 @@ class LibvirtConnection(object):
         self.conn = libvirt.openReadOnly(uri)
         if self.conn == None:
             sys.stdout.write("Failed to open connection to the hypervisor")
-            #FIXME: Need to figure out if exiting is the write thing to do here.
+            # FIXME: Need to figure out if exiting is the write thing to do here.
             sys.exit(1)
 
         # We set this because when libvirt errors are raised, they are still
@@ -53,7 +52,7 @@ class LibvirtConnection(object):
         domains = self.conn.listAllDomains()
         domains = [{"{#DOMAINNAME}": domain.name(), "{#DOMAINUUID}": domain.UUIDString()}
                    for domain in domains if domain.isActive()]
-        return json.dumps({"data": domains})
+        return {"data": domains}
 
     def discover_vnics(self, domain_uuid_string):
         """Discover all virtual network interfaces."""
@@ -61,7 +60,7 @@ class LibvirtConnection(object):
         tree = ElementTree.fromstring(domain.XMLDesc())
         elements = tree.findall('devices/interface/target')
         interfaces = [{"{#VNIC}": element.get('dev')} for element in elements]
-        return json.dumps({"data": interfaces})
+        return {"data": interfaces}
 
     def discover_vdisks(self, domain_uuid_string):
         """Discover all virtual disk drives"""
@@ -69,7 +68,7 @@ class LibvirtConnection(object):
         tree = ElementTree.fromstring(domain.XMLDesc())
         elements = tree.findall('devices/disk/target')
         disks = [{"{#VDISKS}": element.get('dev')} for element in elements]
-        return json.dumps({"data": disks})
+        return {"data": disks}
 
     def get_memory(self, domain_uuid_string, memtype):
         """Get memorystats for domain.
@@ -110,7 +109,7 @@ class LibvirtConnection(object):
 
     def get_cpu(self, domain_uuid_string, cputype):
         """Get CPU statistics. Libvirt returns the stats in nanoseconds.
-        
+
         Returns the overall percent usage.
         """
         domain = self._get_domain(domain_uuid_string)
