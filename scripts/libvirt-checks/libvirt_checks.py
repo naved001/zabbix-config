@@ -37,7 +37,7 @@ class LibvirtConnection(object):
         # See https://stackoverflow.com/questions/45541725/avoiding-console-prints-by-libvirt-qemu-python-apis
         libvirt.registerErrorHandler(f=self.libvirt_callback, ctx=None)
 
-    def _get_domain(self, domain_uuid_string):
+    def _get_domain_by_uuid(self, domain_uuid_string):
         """Find the domain by uuid and return domain object"""
         domain = self.conn.lookupByUUIDString(domain_uuid_string)
         if domain == None:
@@ -52,25 +52,39 @@ class LibvirtConnection(object):
         domains = self.conn.listAllDomains()
         domains = [{"{#DOMAINNAME}": domain.name(), "{#DOMAINUUID}": domain.UUIDString()}
                    for domain in domains if domain.isActive()]
-        return {"data": domains}
+        return domains
 
-    def discover_vnics(self, domain_uuid_string):
-        """Discover all virtual network interfaces."""
-        domain = self._get_domain(domain_uuid_string)
-        tree = ElementTree.fromstring(domain.XMLDesc())
-        elements = tree.findall('devices/interface/target')
-        interfaces = [{"{#VNIC}": element.get('dev'),"{#DOMAINUUID}": domain.UUIDString()} for element in elements]
-        return {"data": interfaces}
+    def discover_all_vnics(self):
+        """Discover all vnics for all domains.
 
-    def discover_vdisks(self, domain_uuid_string):
-        """Discover all virtual disk drives"""
-        domain = self._get_domain(domain_uuid_string)
-        tree = ElementTree.fromstring(domain.XMLDesc())
-        elements = tree.findall('devices/disk/target')
-        disks = [{"{#VDISKS}": element.get('dev')} for element in elements]
-        return {"data": disks}
+        Returns a list of dictionary with vnics name and associated domain's uuid"""
+        domains = self.conn.listAllDomains()
+        domains = [domain for domain in domains if domain.isActive()]
 
-    def get_memory(self, domain_uuid_string, memtype):
+        vnics = []
+        for domain in domains:
+            tree = ElementTree.fromstring(domain.XMLDesc())
+            elements = tree.findall('devices/interface/target')
+            vnics.extend([{"{#VNIC}": element.get('dev'),"{#DOMAINUUID}": domain.UUIDString()} for element in elements])
+
+        return vnics
+
+    def discover_all_vdisks(self):
+        """Discover all virtual disk drives.
+
+        Returns a list of dictionary with vdisks name and associated domain's uuid"""
+        domains = self.conn.listAllDomains()
+        domains = [domain for domain in domains if domain.isActive()]
+
+        vdisks = []
+        for domain in domains:
+            tree = ElementTree.fromstring(domain.XMLDesc())
+            elements = tree.findall('devices/disk/target')
+            vdisks = [{"{#VDISK}": element.get('dev'), "{#DOMAINUUID}": domain.UUIDString()} for element in elements]
+
+        return vdisks
+
+    def get_memory(self, domain_uuid_string):
         """Get memorystats for domain.
 
         Here's a mapping of what the output from
@@ -83,7 +97,7 @@ class LibvirtConnection(object):
 
         The API returns the output in KiB, so we multiply by 1024 to return bytes for zabbix.
         """
-        domain = self._get_domain(domain_uuid_string)
+        domain = self._get_domain_by_uuid(domain_uuid_string)
 
         try:
             stats = domain.memoryStats()
@@ -93,20 +107,18 @@ class LibvirtConnection(object):
             if domain.isActive():
                 raise
             else:
-                return "0"
+                return {"free": 0, "available": 0, "current_allocation": 0}
 
-        memtype_dict = {"free": stats.get("unused", 0) * 1024,
-                        "available": stats.get("usable", 0) * 1024,
-                        "current_allocation": stats.get("actual", 0) * 1024}
+        return {"free": stats.get("unused", 0) * 1024,
+                "available": stats.get("usable", 0) * 1024,
+                "current_allocation": stats.get("actual", 0) * 1024}
 
-        return str(memtype_dict[memtype])
-
-    def get_cpu(self, domain_uuid_string, cputype):
+    def get_cpu(self, domain_uuid_string):
         """Get CPU statistics. Libvirt returns the stats in nanoseconds.
 
         Returns the overall percent usage.
         """
-        domain = self._get_domain(domain_uuid_string)
+        domain = self._get_domain_by_uuid(domain_uuid_string)
 
         try:
             stats_1 = domain.getCPUStats(True)[0]
@@ -118,22 +130,20 @@ class LibvirtConnection(object):
             if domain.isActive():
                 raise
             else:
-                return "0"
+                return {"cpu_time": 0, "system_time": 0, "user_time": 0}
 
         number_of_cpus = domain.info()[3]
 
         def _percent_usage(time1, time2):
             return (time2-time1) / (number_of_cpus * SLEEP_TIME * 10**7)
 
-        cpustats = {"cpu_time": _percent_usage(stats_1['cpu_time'], stats_2['cpu_time']),
-                    "system_time": _percent_usage(stats_1['system_time'], stats_2['system_time']),
-                    "user_time": _percent_usage(stats_1['user_time'], stats_2['user_time'])}
+        return {"cpu_time": _percent_usage(stats_1['cpu_time'], stats_2['cpu_time']),
+                "system_time": _percent_usage(stats_1['system_time'], stats_2['system_time']),
+                "user_time": _percent_usage(stats_1['user_time'], stats_2['user_time'])}
 
-        return str(cpustats[cputype])
-
-    def get_ifaceio(self, domain_uuid_string, iface, stat_type):
+    def get_ifaceio(self, domain_uuid_string, iface):
         """Get Network I / O"""
-        domain = self._get_domain(domain_uuid_string)
+        domain = self._get_domain_by_uuid(domain_uuid_string)
 
         try:
             stats = domain.interfaceStats(iface)
@@ -141,18 +151,13 @@ class LibvirtConnection(object):
             if domain.isActive():
                 raise
             else:
-                return "0"
+                return {"read": 0, "write": 0}
 
-        if stat_type.lower() == "read":
-            return str(stats[0])
-        elif stat_type.lower() == "write":
-            return str(stats[4])
-        else:
-            return("Invalid stat_type.")
+        return {"read": str(stats[0]), "write": str(stats[4])}
 
-    def get_diskio(self, domain_uuid_string, disk, stat_type):
-        """Get Network I / O"""
-        domain = self._get_domain(domain_uuid_string)
+    def get_diskio(self, domain_uuid_string, disk):
+        """Get Disk I / O"""
+        domain = self._get_domain_by_uuid(domain_uuid_string)
 
         try:
             stats = domain.blockStatsFlags(disk)
@@ -160,13 +165,16 @@ class LibvirtConnection(object):
             if domain.isActive():
                 raise
             else:
-                return "0"
+                return {'wr_total_times': 0, 'rd_operations': 0,
+                        'flush_total_times': 0, 'rd_total_times': 0,
+                        'rd_bytes': 0, 'flush_operations': 0,
+                        'wr_operations': 0, 'wr_bytes': 0}
 
-        return str(stats.get(stat_type, "Invalid stat_type"))
+        return stats
 
     def is_active(self, domain_uuid_string):
         """Returns 1 if domain is active, 0 otherwise."""
-        domain = self._get_domain(domain_uuid_string)
+        domain = self._get_domain_by_uuid(domain_uuid_string)
         sys.stdout.write(str(domain.isActive()))
 
 

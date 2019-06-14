@@ -10,70 +10,68 @@ from libvirt_checks import LibvirtConnection
 from pyzabbix import ZabbixMetric, ZabbixSender
 
 
+DOMAIN_KEY = "libvirt.domain.discover"
+VNICS_KEY = "libvirt.nic.discover"
+VDISKS_KEY = "libvirt.disk.discover"
+ZABBIX_HOST =  "naved-ThinkCentre-M92p"
+
+
+def make_metric(item_id, item_type, parameter, value):
+        """returns zabbix metric"""
+        key = "libvirt.{}[{},{}]".format(item_type, item_id, parameter)
+        return ZabbixMetric(ZABBIX_HOST, key, value)
+
+
 class ZabbixLibvirt(object):
     """This class uses LibvirtConnection to gather information and then uses
     ZabbixSender to send it to our zabbix server
     """
-    DOMAIN_KEY = "libvirt.domain.discover"
-    VNICS_KEY = "libvirt.nic.discover"
 
-    def __init__(self, zabbix_server, zabbix_host, libvirt_uri=None):
+    def __init__(self, libvirt_uri=None):
         """main I guess"""
-        self.zabbix_server = zabbix_server
-        self.zabbix_host = zabbix_host
-        self.libvirt_connection = LibvirtConnection(libvirt_uri)
-        self.zabbix_sender = ZabbixSender(zabbix_server)
+        self.conn = LibvirtConnection(libvirt_uri)
 
-    @staticmethod
-    def zabbix_key(item_type, domain_uuid, parameter_type):
-        """Return the zabbix key for an item"""
-        return "libvirt.{}[{},{}]".format(item_type, domain_uuid, parameter_type)
+    def discover_domains(self):
+        """
+        Discover domains on the host and return the ZabbixMetric ready
+        to be sent.
+        """
 
-    def send_discoverd_domains(self):
-        """Send discoverd items"""
-
-        domains = self.libvirt_connection.discover_domains()
+        domains = self.conn.discover_domains()
 
         metric_to_send = ZabbixMetric(
-            self.zabbix_host, self.DOMAIN_KEY, json.dumps(domains))
+            ZABBIX_HOST, self.DOMAIN_KEY, json.dumps({"data": domains}))
 
-        self.zabbix_sender.send([metric_to_send])
+        return metric_to_send
 
-        domains = domains["data"]
+    def discover_all_vnics(self):
+        """Discover all nics and return the ZabbixMetric ready to be sent"""
 
-        # Discover vnics
-        all_vnics = []
-        for domain in domains:
-            domain_uuid = domain["{#DOMAINUUID}"]
-            all_vnics.extend(self.libvirt_connection.discover_vnics(domain_uuid)["data"])
+        vnics = self.conn.discover_all_vnics()
+        metric_to_send = ZabbixMetric(ZABBIX_HOST, VNICS_KEY, json.dumps({"data": vnics}))
 
-        metric_to_send = ZabbixMetric(self.zabbix_host, self.VNICS_KEY, json.dumps({"data": all_vnics}))
-        pprint.pprint(metric_to_send)
-        self.zabbix_sender.send([metric_to_send])
-        print("END OF DISCOVERY")
+        return metric_to_send
+
+    def discover_all_vdisks(self):
+        """Discover all nics and return the ZabbixMetric ready to be sent"""
+
+        vdisks = self.conn.discover_all_vdisks()
+        metric_to_send = ZabbixMetric(ZABBIX_HOST, self.VDISKS_KEY, json.dumps({"data": vdisks}))
+        return metric_to_send
 
 
     def _cpu_usage_metric(self):
         """Get CPU usage and create ZabbixMetric to send"""
-        domains = self.libvirt_connection.discover_domains()["data"]
+        domains = self.conn.discover_domains()
         metrics = []
 
         for domain in domains:
-
             domain_uuid = domain["{#DOMAINUUID}"]
+            stats = self.conn.get_cpu(domain_uuid)
 
-            cpu_time = self.libvirt_connection.get_cpu(domain_uuid, "cpu_time")
-            system_time = self.libvirt_connection.get_cpu(
-                domain_uuid, "system_time")
-            user_time = self.libvirt_connection.get_cpu(
-                domain_uuid, "user_time")
-
-            cpu_time = ZabbixMetric(self.zabbix_host, self.zabbix_key(
-                "cpu", domain_uuid, "cpu_time"), cpu_time)
-            system_time = ZabbixMetric(self.zabbix_host, self.zabbix_key(
-                "cpu", domain_uuid, "system_time"), system_time)
-            user_time = ZabbixMetric(self.zabbix_host, self.zabbix_key(
-                "cpu", domain_uuid, "user_time"), user_time)
+            cpu_time = make_metric(domain_uuid, "cpu", "cpu_time", stats["cpu_time"])
+            system_time = make_metric(domain_uuid, "cpu", "system_time", stats["system_time"])
+            user_time = make_metric(domain_uuid, "cpu", "user_time", stats["user_time"])
 
             metrics.extend([cpu_time, system_time, user_time])
 
@@ -81,25 +79,17 @@ class ZabbixLibvirt(object):
 
     def _memory_usage_metric(self):
         """Get memory usage and create ZabbixMetric to send"""
-        domains = self.libvirt_connection.discover_domains()["data"]
+        domains = self.conn.discover_domains()
         metrics = []
 
         for domain in domains:
 
             domain_uuid = domain["{#DOMAINUUID}"]
+            stats = self.conn.get_memory(domain_uuid)
 
-            free = self.libvirt_connection.get_memory(domain_uuid, "free")
-            available = self.libvirt_connection.get_memory(
-                domain_uuid, "available")
-            current_allocation = self.libvirt_connection.get_memory(
-                domain_uuid, "current_allocation")
-
-            free = ZabbixMetric(self.zabbix_host, self.zabbix_key(
-                "memory", domain_uuid, "free"), free)
-            available = ZabbixMetric(self.zabbix_host, self.zabbix_key(
-                "memory", domain_uuid, "available"), available)
-            current_allocation = ZabbixMetric(self.zabbix_host, self.zabbix_key(
-                "memory", domain_uuid, "current_allocation"), current_allocation)
+            free = make_metric(domain_uuid, "memory", "free", stats["free"])
+            available = make_metric(domain_uuid, "memory", "available", stats["available"])
+            current_allocation = make_metric(domain_uuid, "memory", "current_allocation", stats["current_allocation"])
 
             metrics.extend([free, available, current_allocation])
 
@@ -107,49 +97,59 @@ class ZabbixLibvirt(object):
 
     def _ifaceio_metric(self):
         """Get interface usage metrics"""
-        domains = self.libvirt_connection.discover_domains()["data"]
-        interfaces = []
-        for domain in domains:
-            interfaces.extend(self.libvirt_connection.discover_vnics(domain["{#DOMAINUUID}"])["data"])
-
+        vnics = self.conn.discover_all_vnics()
         metrics = []
-        for interface in interfaces:
-            domain_uuid = interface["{#DOMAINUUID}"]
-            iface = interface["{#VNIC}"]
 
-            read = self.libvirt_connection.get_ifaceio(domain_uuid, iface, "read")
-            write = self.libvirt_connection.get_ifaceio(domain_uuid, iface, "write")
+        for vnic in vnics:
+            domain_uuid = vnic["{#DOMAINUUID}"]
+            iface = vnic["{#VNIC}"]
+            stats = self.conn.get_ifaceio(domain_uuid, iface)
 
-            read_key = "libvirt.nic[{},{},{}]".format(domain_uuid, iface, "read")
-            write_key = "libvirt.nic[{},{},{}]".format(domain_uuid, iface, "write")
+            item_id = domain_uuid + "," + iface
 
-            read = ZabbixMetric(self.zabbix_host, read_key, read)
-            write = ZabbixMetric(self.zabbix_host, write_key, write)
+            read = make_metric(item_id, "nic", "read", stats["read"])
+            write = make_metric(item_id, "nic", "write", stats["write"])
 
             metrics.extend([read, write])
-        print("METRICS FROM IFACEIO")
-        print(metrics)
         return metrics
 
+    def _diskio_metric(self):
+        """Get interface usage metrics"""
+        vdisks = self.conn.discover_all_vdisks()
+        metrics = []
 
+        for vdisk in vdisks:
+            domain_uuid = vdisk["{#DOMAINUUID}"]
+            vdrive = vdisk["{#VDISK}"]
+            stats = self.conn.get_diskio(domain_uuid, vdrive)
+            stat_types = stats.keys()
+
+            item_id = domain_uuid + "," + vdrive
+
+            for stat_type in stat_types:
+                metric = make_metric(item_id, "disk", stat_type, stats[stat_type])
+                metrics.append(metric)
+
+        return metrics
 
     def _all_metrics(self):
         """Send all metrics"""
+        metrics = []
         metrics = self._cpu_usage_metric()
         metrics.extend(self._memory_usage_metric())
         metrics.extend(self._ifaceio_metric())
+        metrics.extend(self._diskio_metric())
         pprint.pprint(metrics)
 
-        self.zabbix_sender.send(metrics)
+        #self.zabbix_sender.send(metrics)
 
 
 def main():
     """main I guess"""
-    zabbix_server = "zabbix.massopen.cloud"
-    zabbix_host = "naved-ThinkCentre-M92p"
 
-    zbxlibvirt = ZabbixLibvirt(zabbix_server, zabbix_host)
-    zbxlibvirt.send_discoverd_domains()
+    zbxlibvirt = ZabbixLibvirt()
+
+    zabbix_sender = ZabbixSender("zabbix.massopen.cloud")
     zbxlibvirt._all_metrics()
 
 
