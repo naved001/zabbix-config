@@ -59,7 +59,7 @@ class LibvirtConnection(object):
         domain = self._get_domain(domain_uuid_string)
         tree = ElementTree.fromstring(domain.XMLDesc())
         elements = tree.findall('devices/interface/target')
-        interfaces = [{"{#VNIC}": element.get('dev')} for element in elements]
+        interfaces = [{"{#VNIC}": element.get('dev'),"{#DOMAINUUID}": domain.UUIDString()} for element in elements]
         return {"data": interfaces}
 
     def discover_vdisks(self, domain_uuid_string):
@@ -95,15 +95,9 @@ class LibvirtConnection(object):
             else:
                 return "0"
 
-        try:
-            memtype_dict = {"free": stats["unused"] * 1024,
-                            "available": stats["usable"] * 1024,
-                            "current_allocation": stats["actual"] * 1024}
-        except KeyError:
-            # If the machine does not have an OS (or booted up), then stats may not contain what
-            # we are looking for and a key error will be raised which will make the item
-            # unsupported in zabbix. For those cases, we mark memory usage as zero.
-            return "0"
+        memtype_dict = {"free": stats.get("unused", 0) * 1024,
+                        "available": stats.get("usable", 0) * 1024,
+                        "current_allocation": stats.get("actual", 0) * 1024}
 
         return str(memtype_dict[memtype])
 
@@ -115,9 +109,9 @@ class LibvirtConnection(object):
         domain = self._get_domain(domain_uuid_string)
 
         try:
-            cpustats_1 = domain.getCPUStats(True)
+            stats_1 = domain.getCPUStats(True)[0]
             time.sleep(SLEEP_TIME)
-            cpustats_2 = domain.getCPUStats(True)
+            stats_2 = domain.getCPUStats(True)[0]
         except libvirt.libvirtError:
             # If the domain is not running, then the cpu usage is 0.
             # If the error is due to other reasons, then re-raise the error.
@@ -128,12 +122,12 @@ class LibvirtConnection(object):
 
         number_of_cpus = domain.info()[3]
 
-        cpustats = {"cpu_time": (cpustats_2[0]['cpu_time'] -
-                                 cpustats_1[0]['cpu_time']) / (number_of_cpus * SLEEP_TIME * 10**7),
-                    "system_time": (cpustats_2[0]['system_time'] -
-                                    cpustats_1[0]['system_time']) / (number_of_cpus * SLEEP_TIME * 10**7),
-                    "user_time": (cpustats_2[0]['user_time'] -
-                                  cpustats_1[0]['user_time']) / (number_of_cpus * SLEEP_TIME * 10**7)}
+        def _percent_usage(time1, time2):
+            return (time2-time1) / (number_of_cpus * SLEEP_TIME * 10**7)
+
+        cpustats = {"cpu_time": _percent_usage(stats_1['cpu_time'], stats_2['cpu_time']),
+                    "system_time": _percent_usage(stats_1['system_time'], stats_2['system_time']),
+                    "user_time": _percent_usage(stats_1['user_time'], stats_2['user_time'])}
 
         return str(cpustats[cputype])
 
@@ -174,3 +168,25 @@ class LibvirtConnection(object):
         """Returns 1 if domain is active, 0 otherwise."""
         domain = self._get_domain(domain_uuid_string)
         sys.stdout.write(str(domain.isActive()))
+
+
+if __name__ == "__main__":
+    """Just some test code"""
+    import json
+    libvirt_connection = LibvirtConnection()
+    domains = libvirt_connection.discover_domains()["data"]
+    print(domains)
+    for domain in domains:
+        print("##########################")
+        domain_uuid = domain["{#DOMAINUUID}"]
+        print(domain["{#DOMAINNAME}"])
+        cpu_time = libvirt_connection.get_cpu(domain_uuid, "cpu_time")
+        system_time = libvirt_connection.get_cpu(domain_uuid, "system_time")
+        user_time = libvirt_connection.get_cpu(domain_uuid, "user_time")
+        free = libvirt_connection.get_memory(domain_uuid, "free")
+        available = libvirt_connection.get_memory(domain_uuid, "available")
+        current_allocation = libvirt_connection.get_memory(
+            domain_uuid, "current_allocation")
+        print(json.dumps({"CPU STATS": [cpu_time, system_time, user_time]}))
+        print(json.dumps(
+            {"Memory STATS": [free, available, current_allocation]}))
