@@ -36,28 +36,17 @@ class ZabbixLibvirt(object):
         to be sent.
         """
 
-        domains = self.conn.discover_domains()
-
-        metric_to_send = ZabbixMetric(
-            ZABBIX_HOST, DOMAIN_KEY, json.dumps({"data": domains}))
-
-        return metric_to_send
+        return self.conn.discover_domains()
 
     def discover_all_vnics(self):
         """Discover all nics and return the ZabbixMetric ready to be sent"""
 
-        vnics = self.conn.discover_all_vnics()
-        metric_to_send = ZabbixMetric(ZABBIX_HOST, VNICS_KEY, json.dumps({"data": vnics}))
-
-        return metric_to_send
+        return self.conn.discover_all_vnics()
 
     def discover_all_vdisks(self):
         """Discover all nics and return the ZabbixMetric ready to be sent"""
 
-        vdisks = self.conn.discover_all_vdisks()
-        metric_to_send = ZabbixMetric(ZABBIX_HOST, VDISKS_KEY, json.dumps({"data": vdisks}))
-        return metric_to_send
-
+        return self.conn.discover_all_vdisks()
 
     def _cpu_usage_metric(self):
         """Get CPU usage and create ZabbixMetric to send"""
@@ -131,7 +120,7 @@ class ZabbixLibvirt(object):
 
         return metrics
 
-    def _all_metrics(self):
+    def all_metrics(self):
         """Send all metrics"""
         metrics = []
         metrics = self._cpu_usage_metric()
@@ -140,18 +129,35 @@ class ZabbixLibvirt(object):
         metrics.extend(self._diskio_metric())
         return metrics
 
+def read_ips():
+    """Read the ips/dns names from a file and return those bad boys"""
+    ip_list = ["172.16.3.36", "172.16.3.30"]
+    return ip_list
 
 def main():
     """main I guess"""
-
-    zbxlibvirt = ZabbixLibvirt()
-
     zabbix_sender = ZabbixSender("zabbix.massopen.cloud")
+    ip_list = read_ips()
 
-    zabbix_sender.send([zbxlibvirt.discover_domains()])
-    zabbix_sender.send([zbxlibvirt.discover_all_vnics()])
-    zabbix_sender.send([zbxlibvirt.discover_all_vdisks()])
-    zabbix_sender.send(zbxlibvirt._all_metrics())
+    all_discovered_domains = []
+    all_discovered_vnics = []
+    all_discovered_vdisks = []
+    combined_metrics = []
+
+    for ip in ip_list:
+        uri = "qemu+ssh://root@" + ip +"/system"
+        zbxlibvirt = ZabbixLibvirt(uri)
+
+        all_discovered_domains += zbxlibvirt.discover_domains()
+        all_discovered_vnics += zbxlibvirt.discover_all_vnics()
+        all_discovered_vdisks += zbxlibvirt.discover_all_vdisks()
+
+        combined_metrics.extend(zbxlibvirt.all_metrics())
+    print("***SENDING PACKET****")
+    zabbix_sender.send([ZabbixMetric(ZABBIX_HOST, DOMAIN_KEY, json.dumps({"data": all_discovered_domains}))])
+    zabbix_sender.send([ZabbixMetric(ZABBIX_HOST, VNICS_KEY, json.dumps({"data": all_discovered_vnics}))])
+    zabbix_sender.send([ZabbixMetric(ZABBIX_HOST, VDISKS_KEY, json.dumps({"data": all_discovered_vdisks}))])
+    zabbix_sender.send(combined_metrics)
 
 if __name__ == "__main__":
     main()
