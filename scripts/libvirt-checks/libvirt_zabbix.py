@@ -12,13 +12,13 @@ from pyzabbix import ZabbixMetric, ZabbixSender
 DOMAIN_KEY = "libvirt.domain.discover"
 VNICS_KEY = "libvirt.nic.discover"
 VDISKS_KEY = "libvirt.disk.discover"
-ZABBIX_HOST =  "naved-ThinkCentre-M92p"
+ZABBIX_HOST = "naved-ThinkCentre-M92p"
 
 
 def make_metric(item_id, item_type, parameter, value):
-        """returns zabbix metric"""
-        key = "libvirt.{}[{},{}]".format(item_type, item_id, parameter)
-        return ZabbixMetric(ZABBIX_HOST, key, value)
+    """returns zabbix metric"""
+    key = "libvirt.{}[{},{}]".format(item_type, item_id, parameter)
+    return ZabbixMetric(ZABBIX_HOST, key, value)
 
 
 class ZabbixLibvirt(object):
@@ -35,17 +35,14 @@ class ZabbixLibvirt(object):
         Discover domains on the host and return the ZabbixMetric ready
         to be sent.
         """
-
         return self.conn.discover_domains()
 
     def discover_all_vnics(self):
         """Discover all nics and return the ZabbixMetric ready to be sent"""
-
         return self.conn.discover_all_vnics()
 
     def discover_all_vdisks(self):
         """Discover all nics and return the ZabbixMetric ready to be sent"""
-
         return self.conn.discover_all_vdisks()
 
     def _cpu_usage_metric(self):
@@ -57,11 +54,31 @@ class ZabbixLibvirt(object):
             domain_uuid = domain["{#DOMAINUUID}"]
             stats = self.conn.get_cpu(domain_uuid)
 
-            cpu_time = make_metric(domain_uuid, "cpu", "cpu_time", stats["cpu_time"])
-            system_time = make_metric(domain_uuid, "cpu", "system_time", stats["system_time"])
-            user_time = make_metric(domain_uuid, "cpu", "user_time", stats["user_time"])
+            cpu_time = make_metric(
+                domain_uuid, "cpu", "cpu_time", stats["cpu_time"])
+            system_time = make_metric(
+                domain_uuid, "cpu", "system_time", stats["system_time"])
+            user_time = make_metric(
+                domain_uuid, "cpu", "user_time", stats["user_time"])
 
             metrics.extend([cpu_time, system_time, user_time])
+
+        return metrics
+
+    def _instance_attributes(self):
+        """Returns the metric with instance name and the name of the host"""
+        domains = self.conn.discover_domains()
+        metrics = []
+
+        for domain in domains:
+            domain_uuid = domain["{#DOMAINUUID}"]
+            domain_name = domain["{#DOMAINNAME}"]
+
+            domain_name = make_metric(
+                domain_uuid, "instance", "name", domain_name)
+            virt_host = make_metric(
+                domain_uuid, "instance", "virt_host", self.conn.get_virt_host())
+            metrics.extend([domain_name, virt_host])
 
         return metrics
 
@@ -76,8 +93,10 @@ class ZabbixLibvirt(object):
             stats = self.conn.get_memory(domain_uuid)
 
             free = make_metric(domain_uuid, "memory", "free", stats["free"])
-            available = make_metric(domain_uuid, "memory", "available", stats["available"])
-            current_allocation = make_metric(domain_uuid, "memory", "current_allocation", stats["current_allocation"])
+            available = make_metric(
+                domain_uuid, "memory", "available", stats["available"])
+            current_allocation = make_metric(
+                domain_uuid, "memory", "current_allocation", stats["current_allocation"])
 
             metrics.extend([free, available, current_allocation])
 
@@ -115,7 +134,8 @@ class ZabbixLibvirt(object):
             item_id = domain_uuid + "," + vdrive
 
             for stat_type in stat_types:
-                metric = make_metric(item_id, "disk", stat_type, stats[stat_type])
+                metric = make_metric(
+                    item_id, "disk", stat_type, stats[stat_type])
                 metrics.append(metric)
 
         return metrics
@@ -127,25 +147,34 @@ class ZabbixLibvirt(object):
         metrics.extend(self._memory_usage_metric())
         metrics.extend(self._ifaceio_metric())
         metrics.extend(self._diskio_metric())
+        metrics.extend(self._instance_attributes())
         return metrics
 
-def read_ips():
+
+def get_hosts():
     """Read the ips/dns names from a file and return those bad boys"""
-    ip_list = ["172.16.3.36", "172.16.3.30"]
-    return ip_list
+
+    listofips = "/etc/zabbix/libvirt-checks/iplist.txt"
+    with open(listofips) as file:
+        data = file.read()
+    host_list = [item.strip() for item in data.split() if "#" not in item]
+    host_list = ["172.16.3.36", "172.16.3.30"]
+
+    return host_list
+
 
 def main():
     """main I guess"""
     zabbix_sender = ZabbixSender("zabbix.massopen.cloud")
-    ip_list = read_ips()
+    host_list = get_hosts()
 
     all_discovered_domains = []
     all_discovered_vnics = []
     all_discovered_vdisks = []
     combined_metrics = []
 
-    for ip in ip_list:
-        uri = "qemu+ssh://root@" + ip +"/system"
+    for host in host_list:
+        uri = "qemu+ssh://root@" + host + "/system"
         zbxlibvirt = ZabbixLibvirt(uri)
 
         all_discovered_domains += zbxlibvirt.discover_domains()
@@ -153,11 +182,16 @@ def main():
         all_discovered_vdisks += zbxlibvirt.discover_all_vdisks()
 
         combined_metrics.extend(zbxlibvirt.all_metrics())
+
     print("***SENDING PACKET****")
-    zabbix_sender.send([ZabbixMetric(ZABBIX_HOST, DOMAIN_KEY, json.dumps({"data": all_discovered_domains}))])
-    zabbix_sender.send([ZabbixMetric(ZABBIX_HOST, VNICS_KEY, json.dumps({"data": all_discovered_vnics}))])
-    zabbix_sender.send([ZabbixMetric(ZABBIX_HOST, VDISKS_KEY, json.dumps({"data": all_discovered_vdisks}))])
+    zabbix_sender.send([ZabbixMetric(ZABBIX_HOST, DOMAIN_KEY,
+                                     json.dumps({"data": all_discovered_domains}))])
+    zabbix_sender.send([ZabbixMetric(ZABBIX_HOST, VNICS_KEY,
+                                     json.dumps({"data": all_discovered_vnics}))])
+    zabbix_sender.send([ZabbixMetric(ZABBIX_HOST, VDISKS_KEY,
+                                     json.dumps({"data": all_discovered_vdisks}))])
     zabbix_sender.send(combined_metrics)
+
 
 if __name__ == "__main__":
     main()

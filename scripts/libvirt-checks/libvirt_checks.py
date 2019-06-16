@@ -28,7 +28,7 @@ class LibvirtConnection(object):
         self.conn = libvirt.openReadOnly(uri)
         if self.conn == None:
             sys.stdout.write("Failed to open connection to the hypervisor")
-            # FIXME: Need to figure out if exiting is the write thing to do here.
+            # FIXME: Need to figure out if exiting is the right thing to do here.
             sys.exit(1)
 
         # We set this because when libvirt errors are raised, they are still
@@ -113,6 +113,10 @@ class LibvirtConnection(object):
                 "available": stats.get("usable", 0) * 1024,
                 "current_allocation": stats.get("actual", 0) * 1024}
 
+    def get_virt_host(self):
+        """Get virtualizatio host's hostname"""
+        return self.conn.getHostname()
+
     def get_cpu(self, domain_uuid_string):
         """Get CPU statistics. Libvirt returns the stats in nanoseconds.
 
@@ -179,22 +183,5 @@ class LibvirtConnection(object):
 
 
 if __name__ == "__main__":
-    """Just some test code"""
-    import json
-    libvirt_connection = LibvirtConnection()
-    domains = libvirt_connection.discover_domains()["data"]
-    print(domains)
-    for domain in domains:
-        print("##########################")
-        domain_uuid = domain["{#DOMAINUUID}"]
-        print(domain["{#DOMAINNAME}"])
-        cpu_time = libvirt_connection.get_cpu(domain_uuid, "cpu_time")
-        system_time = libvirt_connection.get_cpu(domain_uuid, "system_time")
-        user_time = libvirt_connection.get_cpu(domain_uuid, "user_time")
-        free = libvirt_connection.get_memory(domain_uuid, "free")
-        available = libvirt_connection.get_memory(domain_uuid, "available")
-        current_allocation = libvirt_connection.get_memory(
-            domain_uuid, "current_allocation")
-        print(json.dumps({"CPU STATS": [cpu_time, system_time, user_time]}))
-        print(json.dumps(
-            {"Memory STATS": [free, available, current_allocation]}))
+    """Do main things"""
+    print("Main called")
