@@ -5,7 +5,6 @@
 
 import sys
 import json
-import pprint
 from libvirt_checks import LibvirtConnection
 from pyzabbix import ZabbixMetric, ZabbixSender
 
@@ -40,7 +39,7 @@ class ZabbixLibvirt(object):
         domains = self.conn.discover_domains()
 
         metric_to_send = ZabbixMetric(
-            ZABBIX_HOST, self.DOMAIN_KEY, json.dumps({"data": domains}))
+            ZABBIX_HOST, DOMAIN_KEY, json.dumps({"data": domains}))
 
         return metric_to_send
 
@@ -56,7 +55,7 @@ class ZabbixLibvirt(object):
         """Discover all nics and return the ZabbixMetric ready to be sent"""
 
         vdisks = self.conn.discover_all_vdisks()
-        metric_to_send = ZabbixMetric(ZABBIX_HOST, self.VDISKS_KEY, json.dumps({"data": vdisks}))
+        metric_to_send = ZabbixMetric(ZABBIX_HOST, VDISKS_KEY, json.dumps({"data": vdisks}))
         return metric_to_send
 
 
@@ -139,9 +138,7 @@ class ZabbixLibvirt(object):
         metrics.extend(self._memory_usage_metric())
         metrics.extend(self._ifaceio_metric())
         metrics.extend(self._diskio_metric())
-        pprint.pprint(metrics)
-
-        #self.zabbix_sender.send(metrics)
+        return metrics
 
 
 def main():
@@ -150,8 +147,11 @@ def main():
     zbxlibvirt = ZabbixLibvirt()
 
     zabbix_sender = ZabbixSender("zabbix.massopen.cloud")
-    zbxlibvirt._all_metrics()
 
+    zabbix_sender.send([zbxlibvirt.discover_domains()])
+    zabbix_sender.send([zbxlibvirt.discover_all_vnics()])
+    zabbix_sender.send([zbxlibvirt.discover_all_vdisks()])
+    zabbix_sender.send(zbxlibvirt._all_metrics())
 
 if __name__ == "__main__":
     main()
