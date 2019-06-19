@@ -5,6 +5,13 @@
 
 import sys
 import json
+import time
+import functools
+import configparser
+
+import ssl
+import sslpsk
+
 from libvirt_checks import LibvirtConnection
 from pyzabbix import ZabbixMetric, ZabbixSender
 
@@ -12,7 +19,8 @@ from pyzabbix import ZabbixMetric, ZabbixSender
 DOMAIN_KEY = "libvirt.domain.discover"
 VNICS_KEY = "libvirt.nic.discover"
 VDISKS_KEY = "libvirt.disk.discover"
-ZABBIX_HOST = "naved-ThinkCentre-M92p"
+CONFIG_FILE = "/etc/libvirt-checks/config.ini"
+HOSTS_FILE = "/etc/libvirt-checks/iplist.txt"
 
 
 def make_metric(item_id, item_type, parameter, value):
@@ -151,21 +159,57 @@ class ZabbixLibvirt(object):
         return metrics
 
 
+class PyZabbixPSKSocketWrapper:
+    """Implements ssl.wrap_socket with PSK instead of certificates.
+
+    Proxies calls to a `socket` instance.
+
+    Thanks to @KostyaEsmukov for writing this.
+    See the comment and full example here:
+    https://github.com/adubkov/py-zabbix/issues/114#issue-430052782
+    """
+
+    def __init__(self, sock, identity, psk):
+        self.__sock = sock
+        self.__identity = identity
+        self.__psk = psk
+
+    def connect(self, *args, **kwargs):
+        # `sslpsk.wrap_socket` must be called *after* socket.connect,
+        # while the `ssl.wrap_socket` must be called *before* socket.connect.
+        self.__sock.connect(*args, **kwargs)
+
+        # `sslv3 alert bad record mac` exception means incorrect PSK
+        self.__sock = sslpsk.wrap_socket(
+            self.__sock,
+            # https://github.com/zabbix/zabbix/blob/f0a1ad397e5653238638cd1a65a25ff78c6809bb/src/libs/zbxcrypto/tls.c#L3231
+            ssl_version=ssl.PROTOCOL_TLSv1_2,
+            # https://github.com/zabbix/zabbix/blob/f0a1ad397e5653238638cd1a65a25ff78c6809bb/src/libs/zbxcrypto/tls.c#L3179
+            ciphers="PSK-AES128-CBC-SHA",
+            psk=(self.__psk, self.__identity),)
+
+    def __getattr__(self, name):
+        return getattr(self.__sock, name)
+
+
 def get_hosts():
     """Read the ips/dns names from a file and return those bad boys"""
 
-    listofips = "/etc/zabbix/libvirt-checks/iplist.txt"
-    with open(listofips) as file:
+    with open(HOSTS_FILE) as file:
         data = file.read()
     host_list = [item.strip() for item in data.split() if "#" not in item]
-    host_list = ["172.16.3.36", "172.16.3.30"]
 
     return host_list
 
 
 def main():
     """main I guess"""
-    zabbix_sender = ZabbixSender("zabbix.massopen.cloud")
+    custom_wrapper = functools.partial(
+        PyZabbixPSKSocketWrapper, identity=PSK_IDENTITY, psk=bytes(bytearray.fromhex(PSK)))
+
+    zabbix_sender = ZabbixSender(
+        zabbix_server="zabbix.massopen.cloud", socket_wrapper=custom_wrapper)
+
     host_list = get_hosts()
 
     all_discovered_domains = []
@@ -174,6 +218,7 @@ def main():
     combined_metrics = []
 
     for host in host_list:
+        print("***For host: " + str(host))
         uri = "qemu+ssh://root@" + host + "/system"
         zbxlibvirt = ZabbixLibvirt(uri)
 
@@ -183,7 +228,7 @@ def main():
 
         combined_metrics.extend(zbxlibvirt.all_metrics())
 
-    print("***SENDING PACKET****")
+    print("***SENDING PACKET at ****" + str(time.ctime()))
     zabbix_sender.send([ZabbixMetric(ZABBIX_HOST, DOMAIN_KEY,
                                      json.dumps({"data": all_discovered_domains}))])
     zabbix_sender.send([ZabbixMetric(ZABBIX_HOST, VNICS_KEY,
@@ -194,4 +239,9 @@ def main():
 
 
 if __name__ == "__main__":
+    config = configparser.ConfigParser()
+    config.read(CONFIG_FILE)
+    PSK = config['general']['PSK']
+    PSK_IDENTITY = config['general']['PSK_IDENTITY']
+    ZABBIX_HOST = config['general']['ZABBIX_HOST']
     main()
