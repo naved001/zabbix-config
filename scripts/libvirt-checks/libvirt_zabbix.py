@@ -26,7 +26,7 @@ HOSTS_FILE = "/etc/libvirt-checks/iplist.txt"
 def make_metric(item_id, item_type, parameter, value):
     """returns zabbix metric"""
     key = "libvirt.{}[{},{}]".format(item_type, item_id, parameter)
-    return ZabbixMetric(ZABBIX_HOST, key, value)
+    return ZabbixMetric(HOST_IN_ZABBIX, key, value)
 
 
 class ZabbixLibvirt(object):
@@ -208,7 +208,7 @@ def main():
         PyZabbixPSKSocketWrapper, identity=PSK_IDENTITY, psk=bytes(bytearray.fromhex(PSK)))
 
     zabbix_sender = ZabbixSender(
-        zabbix_server="zabbix.massopen.cloud", socket_wrapper=custom_wrapper)
+        zabbix_server=ZABBIX_SERVER, socket_wrapper=custom_wrapper)
 
     host_list = get_hosts()
 
@@ -229,11 +229,11 @@ def main():
         combined_metrics.extend(zbxlibvirt.all_metrics())
 
     print("***SENDING PACKET at ****" + str(time.ctime()))
-    zabbix_sender.send([ZabbixMetric(ZABBIX_HOST, DOMAIN_KEY,
+    zabbix_sender.send([ZabbixMetric(HOST_IN_ZABBIX, DOMAIN_KEY,
                                      json.dumps({"data": all_discovered_domains}))])
-    zabbix_sender.send([ZabbixMetric(ZABBIX_HOST, VNICS_KEY,
+    zabbix_sender.send([ZabbixMetric(HOST_IN_ZABBIX, VNICS_KEY,
                                      json.dumps({"data": all_discovered_vnics}))])
-    zabbix_sender.send([ZabbixMetric(ZABBIX_HOST, VDISKS_KEY,
+    zabbix_sender.send([ZabbixMetric(HOST_IN_ZABBIX, VDISKS_KEY,
                                      json.dumps({"data": all_discovered_vdisks}))])
     zabbix_sender.send(combined_metrics)
 
@@ -243,5 +243,6 @@ if __name__ == "__main__":
     config.read(CONFIG_FILE)
     PSK = config['general']['PSK']
     PSK_IDENTITY = config['general']['PSK_IDENTITY']
-    ZABBIX_HOST = config['general']['ZABBIX_HOST']
+    HOST_IN_ZABBIX = config['general']['HOST_IN_ZABBIX']
+    ZABBIX_SERVER = config['general']['ZABBIX_SERVER']
     main()
